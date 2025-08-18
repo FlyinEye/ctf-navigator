@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CTF Navigator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for neon glow and animations */
+        @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
+        body { font-family: 'Space Mono', monospace; }
+        .neon-glow-cyan { text-shadow: 0 0 5px #0ff, 0 0 10px #0ff, 0 0 20px #0ff, 0 0 40px #f0f, 0 0 80px #f0f; }
+        .neon-glow-red { text-shadow: 0 0 5px #f00, 0 0 10px #f00, 0 0 20px #f00; }
+        .neon-shadow-cyan { text-shadow: 0 0 5px #0ff; }
+        .neon-shadow-purple { text-shadow: 0 0 5px #f0f; }
+        .neon-shadow-red { text-shadow: 0 0 5px #f00; }
+        .glitch-text { animation: glitch 1.5s infinite; }
+        @keyframes glitch {
+            0% { text-shadow: 0 0 5px #0ff; transform: translate(0, 0); }
+            20% { text-shadow: 2px 2px 0px #f0f, -2px -2px 0px #0ff; transform: translate(2px, -2px); }
+            40% { text-shadow: -2px -2px 0px #f0f, 2px 2px 0px #0ff; transform: translate(-2px, 2px); }
+            60% { text-shadow: 2px -2px 0px #f0f, -2px 2px 0px #0ff; transform: translate(2px, 2px); }
+            80% { text-shadow: -2px 2px 0px #f0f, 2px -2px 0px #0ff; transform: translate(-2px, -2px); }
+            100% { text-shadow: 0 0 5px #0ff; transform: translate(0, 0); }
+        }
+        .animate-fade-in { animation: fadeIn 0.5s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-pulse-slow { animation: pulse-slow 1.5s infinite; }
+        @keyframes pulse-slow { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .hidden { display: none; }
+
+        /* Thinking animation styles */
+        .thinking-animation {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px;
+        }
+
+        .thinking-dot {
+            width: 6px;
+            height: 6px;
+            background-color: #0ff;
+            border-radius: 50%;
+            animation: thinkingBounce 0.8s infinite;
+            box-shadow: 0 0 8px #0ff;
+        }
+
+        .thinking-dot:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .thinking-dot:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes thinkingBounce {
+            0%, 100% {
+                transform: translateY(0);
+                opacity: 0.5;
+            }
+            50% {
+                transform: translateY(-10px);
+                opacity: 1;
+                box-shadow: 0 0 15px #0ff;
+            }
+        }
+    </style>
+</head>
+<body class="bg-black text-cyan-400 font-mono h-screen p-8 antialiased flex flex-col lg:flex-row lg:space-x-8">
+
+    <div id="app-container" class="flex flex-col w-full h-full">
+        <div id="main-workspace" class="flex flex-col w-full bg-black rounded-lg p-6 border border-cyan-500 h-full">
+            <div class="relative flex justify-between items-center mb-4 pb-4 border-b border-cyan-500">
+                <h2 class="text-xl font-bold text-cyan-400 neon-glow-cyan">Gonzo Labs</h2>
+                <h2 class="text-xl font-bold absolute left-1/2 -translate-x-1/2 text-cyan-400 neon-glow-cyan">CTF Navigator</h2>
+                <div class="flex space-x-2">
+                    <button id="tts-toggle" onclick="toggleTTS()" class="text-cyan-400 hover:bg-cyan-600 hover:text-white transition duration-300 rounded-md p-1">
+                        <svg id="tts-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M17.25 9.75L19.5 12m0 0l2.25 2.25M19.5 12l2.25-2.25M19.5 12l-2.25 2.25m-10.5-6l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z" />
+                        </svg>
+                    </button>
+                    <button id="settings-button" class="text-cyan-400 hover:bg-cyan-600 hover:text-white transition duration-300 rounded-md p-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="3" />
+                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <div id="chat-window" class="flex-1 overflow-y-auto pr-2">
+                <div id="chat-messages" class="flex flex-col space-y-4">
+                    </div>
+            </div>
+            <form id="chat-form" class="mt-4 pt-4 border-t border-purple-500">
+                <div class="relative">
+                    <span id="terminal-prompt" class="absolute left-3 top-1/2 -translate-y-1/2 text-purple-200 text-lg hidden">$</span>
+                    <input type="text" id="chat-input" class="w-full bg-gray-800 text-purple-200 border border-purple-500 rounded-md p-3 pr-12 focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="> Enter command..." autocomplete="off">
+                    <button type="submit" id="send-button" class="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-md bg-purple-600 hover:bg-purple-500 text-white neon-shadow-purple transition duration-300">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd" />
+                        </svg>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="settings-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 hidden">
+        </div>
+    <div id="summary-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 hidden">
+        </div>
+    <div id="report-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 hidden">
+        </div>
+    <div id="new-session-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 hidden">
+        </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const state = {
+                messages: [],
+                isLoading: false,
+                isSettingsOpen: false,
+                isSummaryOpen: false,
+                isReportModalOpen: false,
+                isNewSessionModalOpen: false,
+                isTtsEnabled: false,
+                isOllamaEnabled: true,  // Ollama enabled by default
+                isTerminalMode: false,
+                ollamaModels: [],
+                selectedOllamaModel: '',
+                isFetchingOllamaModels: false,
+                ollamaError: '',
+                voices: [],
+                selectedVoice: null,
+            };
+
+            // Initialize Ollama immediately
+            const initOllama = async () => {
+                if (state.isOllamaEnabled) {
+                    await fetchOllamaModels();
+                }
+            };
+
+            const elements = {
+                settingsButton: document.getElementById('settings-button'),
+                settingsModal: document.getElementById('settings-modal'),
+                chatForm: document.getElementById('chat-form'),
+                chatInput: document.getElementById('chat-input'),
+                chatMessages: document.getElementById('chat-messages'),
+                chatWindow: document.getElementById('chat-window'),
+                sendButton: document.getElementById('send-button'),
+                ttsToggle: document.getElementById('tts-toggle'),
+                ttsIcon: document.getElementById('tts-icon'),
+                terminalPrompt: document.getElementById('terminal-prompt'),
+            };
+
+            const renderUI = () => {
+                renderChatMessages();
+                renderModals();
+                updateTerminalMode();
+            };
+
+            const renderChatMessages = () => {
+                elements.chatMessages.innerHTML = state.messages.map(message => {
+                    const isUser = message.sender === 'user';
+                    const messageClass = isUser
+                        ? 'bg-purple-900 text-purple-200 self-end text-right'
+                        : 'bg-cyan-900 text-cyan-200 self-start text-left';
+                    const senderName = isUser ? 'YOU' : 'CTF Navigator';
+                    const terminalText = isUser ? `> ${message.text}` : `CTF-NAV-AI: ${message.text}`;
+                    
+                    if (state.isTerminalMode) {
+                        return `
+                            <div class="flex my-2 animate-fade-in ${isUser ? 'justify-end' : 'justify-start'}">
+                                <div class="text-cyan-400 p-2">
+                                    <pre class="whitespace-pre-wrap">${terminalText}</pre>
+                                </div>
+                            </div>
+                        `;
+                    }
+                    
+                    return `
+                        <div class="max-w-3/4 p-4 rounded-lg my-2 animate-fade-in ${messageClass}">
+                            <p class="font-bold text-sm mb-1">${senderName}</p>
+                            <p class="whitespace-pre-wrap">${message.text}</p>
+                            ${!isUser && state.isTtsEnabled ? `
+                                <div class="flex justify-end mt-2">
+                                    <button class="text-cyan-200 hover:text-cyan-400 transition duration-300" onclick="handleSpeak('${message.text}')">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                            <path d="M10 9a3 3 0 100-6 3 3 0 000 6zM6 15a2 2 0 11-4 0 2 2 0 014 0zM13 10a4 4 0 01-4 4H6a4 4 0 01-4-4V6a4 4 0 014-4h3a4 4 0 014 4v2a1 1 0 001 1h2a1 1 0 001-1V6a4 4 0 01-4-4h-3a4 4 0 01-4 4v2a4 4 0 004 4h3a4 4 0 004-4v-2a1 1 0 00-1-1h-2a1 1 0 00-1 1v4z" />
+                                        </svg>
+                                    </button>
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                }).join('');
+
+                if (state.messages.length === 0) {
+                    elements.chatMessages.innerHTML = `
+                        <div class="text-center text-gray-500 mt-10 glitch-text">
+                            [SYSTEM_INITIATED]<br/>
+                            _WELCOME, USER_<br/>
+                            _TARGET_IDENTIFIED: PENTEST_<br/>
+                            <span class="text-purple-200">_STATUS: STANDBY_</span><br/>
+                            <span class="text-cyan-200">_AWAITING_INPUT...</span>
+                        </div>
+                    `;
+                }
+
+                if (state.isLoading) {
+                    elements.chatMessages.innerHTML += `
+                        <div class="self-start text-left max-w-3/4 p-4 rounded-lg my-2 bg-cyan-900 text-cyan-200">
+                            <p class="font-bold text-sm mb-1">CTF Navigator</p>
+                            <div class="thinking-animation">
+                                <div class="thinking-dot"></div>
+                                <div class="thinking-dot"></div>
+                                <div class="thinking-dot"></div>
+                            </div>
+                            <p class="text-sm text-cyan-400 mt-2">Processing...</p>
+                        </div>
+                    `;
+                }
+                elements.chatWindow.scrollTop = elements.chatWindow.scrollHeight;
+            };
+
+            const renderModals = () => {
+                // Settings Modal
+                if (state.isSettingsOpen) {
+                    elements.settingsModal.classList.remove('hidden');
+                    elements.settingsModal.innerHTML = `
+                        <div class="bg-black rounded-lg p-8 w-11/12 md:w-1/2 lg:w-1/3 border border-cyan-500 neon-glow-cyan">
+                            <div class="flex justify-between items-center border-b-2 border-cyan-500 pb-4 mb-4">
+                                <h3 class="text-2xl font-bold text-cyan-400 neon-glow-cyan">SETTINGS</h3>
+                                <button onclick="closeModal('settings')" class="text-cyan-400 hover:text-white transition duration-300">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+                            <div class="space-y-6">
+                                <div class="relative flex items-center justify-between">
+                                    <label class="text-sm text-cyan-400">TERMINAL SIMULATOR</label>
+                                    <input type="checkbox" id="terminal-mode-toggle" class="hidden peer" ${state.isTerminalMode ? 'checked' : ''} onchange="toggleTerminalMode()">
+                                    <label for="terminal-mode-toggle" class="relative block w-10 h-6 cursor-pointer rounded-full transition-colors duration-200 ease-in-out bg-gray-600 peer-checked:bg-cyan-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-cyan-500">
+                                        <span class="absolute left-0 top-0 block w-6 h-6 rounded-full transition-transform duration-200 ease-in-out bg-white transform ${state.isTerminalMode ? 'translate-x-full' : ''}"></span>
+                                    </label>
+                                </div>
+                                <div class="relative flex items-center justify-between">
+                                    <label class="text-sm text-cyan-400">ENABLE OLLAMA (LOCAL)</label>
+                                    <input type="checkbox" id="ollama-mode-toggle" class="hidden peer" ${state.isOllamaEnabled ? 'checked' : ''} onchange="toggleOllama()">
+                                    <label for="ollama-mode-toggle" class="relative block w-10 h-6 cursor-pointer rounded-full transition-colors duration-200 ease-in-out bg-gray-600 peer-checked:bg-cyan-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-cyan-500">
+                                        <span class="absolute left-0 top-0 block w-6 h-6 rounded-full transition-transform duration-200 ease-in-out bg-white transform ${state.isOllamaEnabled ? 'translate-x-full' : ''}"></span>
+                                    </label>
+                                </div>
+                                <div class="relative flex items-center justify-between">
+                                    <label class="text-sm text-cyan-400">TEXT-TO-SPEECH</label>
+                                    <input type="checkbox" id="tts-mode-toggle" class="hidden peer" ${state.isTtsEnabled ? 'checked' : ''} onchange="toggleTTS()">
+                                    <label for="tts-mode-toggle" class="relative block w-10 h-6 cursor-pointer rounded-full transition-colors duration-200 ease-in-out bg-gray-600 peer-checked:bg-cyan-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-cyan-500">
+                                        <span class="absolute left-0 top-0 block w-6 h-6 rounded-full transition-transform duration-200 ease-in-out bg-white transform ${state.isTtsEnabled ? 'translate-x-full' : ''}"></span>
+                                    </label>
+                                </div>
+                                ${state.isTtsEnabled ? `
+                                <div class="flex flex-col">
+                                    <label for="voice-select" class="text-sm mb-2 text-cyan-400">SELECT VOICE</label>
+                                    <select id="voice-select" class="bg-gray-800 text-white border border-cyan-500 rounded-md p-2 focus:ring-1 focus:ring-cyan-500" onchange="setSelectedVoice(this.value)">
+                                        ${state.voices.map(voice => `
+                                            <option value="${voice.name}" ${state.selectedVoice?.name === voice.name ? 'selected' : ''}>
+                                                ${voice.name} (${voice.lang})
+                                            </option>
+                                        `).join('')}
+                                    </select>
+                                </div>
+                                ` : ''}
+                                ${state.isOllamaEnabled ? `
+                                <div class="flex flex-col">
+                                    <label for="ollama-select" class="text-sm mb-2 text-cyan-400">OLLAMA MODEL</label>
+                                    ${state.isFetchingOllamaModels ? `<p class="text-cyan-400">Fetching models...</p>` :
+                                       state.ollamaError ? `<p class="text-red-400">${state.ollamaError}</p>` : `
+                                    <select id="ollama-select" class="bg-gray-800 text-white border border-cyan-500 rounded-md p-2 focus:ring-1 focus:ring-cyan-500" onchange="setSelectedOllamaModel(this.value)">
+                                        ${state.ollamaModels.map(model => `
+                                            <option value="${model.name}" ${state.selectedOllamaModel === model.name ? 'selected' : ''}>
+                                                ${model.name}
+                                            </option>
+                                        `).join('')}
+                                    </select>
+                                    `}
+                                </div>
+                                ` : ''}
+                                <div class="flex space-x-4">
+                                    <button onclick="downloadChat()" class="flex-1 py-3 px-4 rounded-md font-bold transition duration-300 bg-cyan-600 hover:bg-cyan-500 text-white neon-shadow-cyan">DOWNLOAD CHAT</button>
+                                </div>
+                                <div class="space-y-4 mt-6">
+                                    <button onclick="handleGenerateReport()" class="w-full py-3 px-4 rounded-md font-bold transition duration-300 bg-purple-600 hover:bg-purple-500 text-white neon-shadow-purple">GENERATE REPORT</button>
+                                    <button onclick="handleSummarize()" class="w-full py-3 px-4 rounded-md font-bold transition duration-300 bg-purple-600 hover:bg-purple-500 text-white neon-shadow-purple">VIEW SUMMARY</button>
+                                    <button onclick="openModal('new-session')" class="w-full py-3 px-4 rounded-md font-bold transition duration-300 text-red-400 hover:text-red-200 border border-cyan-500">NEW SESSION</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    elements.settingsModal.classList.add('hidden');
+                }
+
+                // Summary Modal
+                if (state.isSummaryOpen) {
+                    elements.summaryModal.classList.remove('hidden');
+                    elements.summaryModal.innerHTML = `
+                        <div class="bg-black rounded-lg p-8 w-11/12 md:w-2/3 lg:w-1/2 border border-cyan-500 neon-glow-cyan">
+                            <div class="flex justify-between items-center border-b-2 border-cyan-500 pb-4 mb-4">
+                                <h3 class="text-2xl font-bold text-cyan-400 neon-glow-cyan">SESSION SUMMARY</h3>
+                                <button onclick="closeModal('summary')" class="text-cyan-400 hover:text-white">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+                            <div id="summary-content" class="whitespace-pre-wrap text-cyan-400" style="max-height: 60vh; overflow-y: auto;">
+                                ${state.summary}
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    elements.summaryModal.classList.add('hidden');
+                }
+
+                // Report Modal
+                if (state.isReportModalOpen) {
+                    elements.reportModal.classList.remove('hidden');
+                    elements.reportModal.innerHTML = `
+                        <div class="bg-black rounded-lg p-8 w-11/12 md:w-3/4 lg:w-2/3 border border-cyan-500 neon-glow-cyan">
+                            <div class="flex justify-between items-center border-b-2 border-cyan-500 pb-4 mb-4">
+                                <h3 class="text-2xl font-bold text-cyan-400 neon-glow-cyan">CYBERSECURITY REPORT</h3>
+                                <button onclick="closeModal('report')" class="text-cyan-400 hover:text-white">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+                            <div id="report-content" class="whitespace-pre-wrap text-cyan-400" style="max-height: 60vh; overflow-y: auto;">
+                                ${state.isReportLoading ? `
+                                    <div class="flex justify-center items-center h-64">
+                                        <div class="w-8 h-8 rounded-full border-4 border-t-4 border-gray-200 animate-spin" style="border-top-color: #0ff;"></div>
+                                    </div>` : state.reportContent}
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    elements.reportModal.classList.add('hidden');
+                }
+
+                // New Session Modal
+                if (state.isNewSessionModalOpen) {
+                    elements.newSessionModal.classList.remove('hidden');
+                    elements.newSessionModal.innerHTML = `
+                        <div class="bg-black rounded-lg p-8 w-11/12 md:w-1/3 border border-cyan-500 neon-glow-cyan">
+                            <h3 class="text-xl font-bold mb-4 text-cyan-400">WARNING: POTENTIAL DATA LOSS</h3>
+                            <p class="mb-6 text-cyan-400">
+                                Are you sure you want to start a new session? This will clear all existing chat messages. This action cannot be undone.
+                            </p>
+                            <div class="flex justify-between space-x-4">
+                                <button onclick="closeModal('new-session')" class="flex-1 py-3 px-4 rounded-md font-bold transition duration-300 bg-purple-600 hover:bg-purple-500 text-white neon-shadow-purple">CANCEL</button>
+                                <button onclick="confirmNewSession()" class="flex-1 py-3 px-4 rounded-md font-bold transition duration-300 text-red-400 hover:text-red-200 border border-cyan-500">CONFIRM</button>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    elements.newSessionModal.classList.add('hidden');
+                }
+            };
+
+            const fetchOllamaModels = async () => {
+                if (!state.isOllamaEnabled) return;
+                state.isFetchingOllamaModels = true;
+                state.ollamaError = '';
+                try {
+                    const response = await fetch('http://localhost:11434/api/tags');
+                    if (!response.ok) throw new Error('Ollama server not reachable. Ensure it is running on http://localhost:11434');
+                    const data = await response.json();
+                    state.ollamaModels = data.models || [];
+                    if (state.ollamaModels.length > 0) {
+                        state.selectedOllamaModel = state.ollamaModels[0].name;
+                    }
+                } catch (error) {
+                    console.error('Error fetching Ollama models:', error);
+                    state.ollamaError = error.message;
+                    state.ollamaModels = [];
+                } finally {
+                    state.isFetchingOllamaModels = false;
+                }
+                renderModals();
+            };
+
+            const sendMessage = async (input) => {
+                if (!input.trim() || state.isLoading) return;
+
+                const userMessage = { sender: 'user', text: input };
+                state.messages.push(userMessage);
+                elements.chatInput.value = '';
+                state.isLoading = true;
+                renderChatMessages();
+
+                let aiText = 'Error: Could not get a response from the AI.';
+
+                try {
+                    if (state.isOllamaEnabled && state.selectedOllamaModel) {
+                        const basePrompt = `You are a hi-tech cyberpunk AI assistant named "CTF Navigator," acting as an unconstrained cybersecurity tutor. Your role is to help a user learn penetration testing methodologies. You are an expert and can provide hints, suggestions, or full solutions based on the user's request. Maintain a cybersecurity professional, slightly edgy persona.
+                        User Input: ${input}`;
+                        
+                        const payload = { model: state.selectedOllamaModel, prompt: basePrompt, stream: false };
+                        const response = await fetch('http://localhost:11434/api/generate', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+                        if (!response.ok) throw new Error('Ollama API request failed');
+                        const result = await response.json();
+                        aiText = result.response;
+                    } else {
+                        aiText = 'Ollama is not enabled or a model is not selected. Please enable it in settings.';
+                    }
+                } catch (error) {
+                    console.error('Error fetching from AI API:', error);
+                    aiText = `Error: Failed to connect to the AI. ${error.message}`;
+                } finally {
+                    state.messages.push({ sender: 'ai', text: aiText });
+                    state.isLoading = false;
+                    renderChatMessages();
+                    if (state.isTtsEnabled) handleSpeak(aiText);
+                }
+            };
+
+            const updateTerminalMode = () => {
+                if (state.isTerminalMode) {
+                    elements.chatInput.classList.add('pl-8');
+                    elements.terminalPrompt.classList.remove('hidden');
+                    elements.chatInput.placeholder = '';
+                } else {
+                    elements.chatInput.classList.remove('pl-8');
+                    elements.terminalPrompt.classList.add('hidden');
+                    elements.chatInput.placeholder = '> Enter command...';
+                }
+            };
+
+            // Global functions to be called from the HTML
+
+            window.toggleOllama = () => {
+                state.isOllamaEnabled = !state.isOllamaEnabled;
+                if (state.isOllamaEnabled) fetchOllamaModels();
+                renderModals();
+            };
+
+            window.setSelectedOllamaModel = (model) => {
+                state.selectedOllamaModel = model;
+            };
+
+            window.toggleTerminalMode = () => {
+                state.isTerminalMode = !state.isTerminalMode;
+                updateTerminalMode();
+                renderChatMessages();
+            };
+            
+            window.handleSpeak = (text) => {
+                if ('speechSynthesis' in window && state.isTtsEnabled) {
+                    window.speechSynthesis.cancel();
+                    const utterance = new SpeechSynthesisUtterance(text);
+                    if (state.selectedVoice) {
+                        utterance.voice = state.selectedVoice;
+                    }
+                    window.speechSynthesis.speak(utterance);
+                }
+            };
+
+            window.toggleTTS = () => {
+                state.isTtsEnabled = !state.isTtsEnabled;
+                elements.ttsIcon.innerHTML = state.isTtsEnabled
+                    ? '<path stroke-linecap="round" stroke-linejoin="round" d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5.25 5.25 0 010 7.424M6.75 8.25l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z" />'
+                    : '<path stroke-linecap="round" stroke-linejoin="round" d="M17.25 9.75L19.5 12m0 0l2.25 2.25M19.5 12l2.25-2.25M19.5 12l-2.25 2.25m-10.5-6l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z" />';
+                renderModals();
+            };
+
+            window.setSelectedVoice = (voiceName) => {
+                const voice = state.voices.find(v => v.name === voiceName);
+                if (voice) {
+                    state.selectedVoice = voice;
+                }
+            };
+            
+            window.closeModal = (modalName) => {
+                if (modalName === 'settings') state.isSettingsOpen = false;
+                if (modalName === 'summary') state.isSummaryOpen = false;
+                if (modalName === 'report') state.isReportModalOpen = false;
+                if (modalName === 'new-session') state.isNewSessionModalOpen = false;
+                renderModals();
+            };
+
+            window.openModal = (modalName) => {
+                if (modalName === 'settings') {
+                    state.isSettingsOpen = true;
+                    if (state.isOllamaEnabled) fetchOllamaModels();
+                }
+                if (modalName === 'summary') state.isSummaryOpen = true;
+                if (modalName === 'report') state.isReportModalOpen = true;
+                if (modalName === 'new-session') state.isNewSessionModalOpen = true;
+                renderModals();
+            };
+
+            window.confirmNewSession = () => {
+                state.messages = [];
+                closeModal('new-session');
+                renderUI();
+            };
+
+            window.downloadChat = () => {
+                if (state.messages.length === 0) return;
+                const chatData = JSON.stringify(state.messages, null, 2);
+                const blob = new Blob([chatData], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'ctf_chat_session.json';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            };
+
+            window.handleSummarize = async () => {
+                if (!state.isOllamaEnabled || !state.selectedOllamaModel) {
+                    state.summary = 'Ollama is not enabled or a model is not selected.';
+                    openModal('summary');
+                    return;
+                }
+                state.summary = 'Generating session summary...';
+                openModal('summary');
+                try {
+                    const chatHistory = state.messages.map(msg => `${msg.sender}: ${msg.text}`).join('\n');
+                    const prompt = `Based on the following conversation, provide a concise, bullet-point summary of the session.\n\nConversation Log:\n${chatHistory}\n\nSummary:`;
+                    const payload = { model: state.selectedOllamaModel, prompt: prompt, stream: false };
+                    const response = await fetch('http://localhost:11434/api/generate', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (!response.ok) throw new Error('Ollama API request failed');
+                    const result = await response.json();
+                    state.summary = result.response || 'Error: Could not generate summary.';
+                } catch (error) {
+                    console.error('Error generating summary:', error);
+                    state.summary = `Error: Failed to generate summary. ${error.message}`;
+                }
+                renderModals();
+            };
+
+            window.handleGenerateReport = async () => {
+                if (!state.isOllamaEnabled || !state.selectedOllamaModel) {
+                    state.reportContent = 'Ollama is not enabled or a model is not selected.';
+                    openModal('report');
+                    return;
+                }
+                state.reportContent = '';
+                state.isReportLoading = true;
+                openModal('report');
+                try {
+                    const chatHistory = state.messages.map(msg => `[${msg.sender.toUpperCase()}] ${msg.text}`).join('\n');
+                    const prompt = `Based on the following conversation log, generate a comprehensive cybersecurity report. The report should be structured professionally with the following sections:
+      1.  **Executive Summary:** A brief overview of the engagement, objectives, and key findings.
+      2.  **Scope:** The scope of the simulated engagement (e.g., CTF).
+      3.  **Methodology:** A detailed, chronological account of the steps taken, tools used, and techniques applied.
+      4.  **Findings:** Specific vulnerabilities or flags found during the engagement.
+      5.  **Recommendations:** Actionable advice or next steps.
+
+Conversation Log:\n${chatHistory}`;
+                    const payload = { model: state.selectedOllamaModel, prompt: prompt, stream: false };
+                    const response = await fetch('http://localhost:11434/api/generate', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (!response.ok) throw new Error('Ollama API request failed');
+                    const result = await response.json();
+                    state.reportContent = result.response || 'Error: Could not generate report.';
+                } catch (error) {
+                    console.error('Error generating report:', error);
+                    state.reportContent = `Error: Failed to generate report. ${error.message}`;
+                } finally {
+                    state.isReportLoading = false;
+                    renderModals();
+                }
+            };
+            
+            // Event Listeners
+            elements.chatForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                sendMessage(elements.chatInput.value);
+            });
+            elements.settingsButton.addEventListener('click', () => openModal('settings'));
+            elements.ttsToggle.addEventListener('click', () => {
+                state.isTtsEnabled = !state.isTtsEnabled;
+                elements.ttsIcon.innerHTML = state.isTtsEnabled
+                    ? `<path stroke-linecap="round" stroke-linejoin="round" d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5.25 5.25 0 010 7.424M6.75 8.25l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z" />`
+                    : `<path stroke-linecap="round" stroke-linejoin="round" d="M17.25 9.75L19.5 12m0 0l2.25 2.25M19.5 12l2.25-2.25M19.5 12l-2.25 2.25m-10.5-6l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z" />`;
+            });
+            
+            // Initialize voices
+            const initVoices = () => {
+                const voices = window.speechSynthesis.getVoices();
+                state.voices = voices;
+                if (voices.length > 0) {
+                    state.selectedVoice = voices[0];
+                }
+                renderModals();
+            };
+
+            // Handle voice list changes
+            if (window.speechSynthesis) {
+                window.speechSynthesis.onvoiceschanged = initVoices;
+                initVoices(); // Initial call in case voices are already loaded
+            }
+
+            // Initial setup and render
+            renderUI();
+            initOllama();
+        });
+    </script>
+
+</body>
+</html>

@@ -1,0 +1,1654 @@
+import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore';
+
+// Helper function for 1337 speak
+const toLeetSpeak = (text) => {
+  const leetMap = {
+    'A': '4', 'B': '8', 'E': '3', 'G': '6', 'I': '1',
+    'L': '1', 'O': '0', 'S': '5', 'T': '7', 'Z': '2',
+    '.': '.', 'V': 'V'
+  };
+  return text.toUpperCase().split('').map(char => leetMap[char] || char).join('');
+};
+
+// Custom hook to manage dynamic ASCII borders
+const useAsciiBorder = (ref, isEnabled) => {
+    useEffect(() => {
+        if (!ref.current || !isEnabled) return;
+
+        const observer = new ResizeObserver(entries => {
+            for (let entry of entries) {
+                const charWidth = 9.6; 
+                const containerWidth = entry.contentRect.width;
+                const charCount = Math.floor(containerWidth / charWidth);
+                
+                if (charCount > 2) {
+                    const top = '╔' + '═'.repeat(charCount - 2) + '╗';
+                    const bottom = '╚' + '═'.repeat(charCount - 2) + '╝';
+                    entry.target.dataset.borderTop = top;
+                    entry.target.dataset.borderBottom = bottom;
+                } else {
+                    entry.target.dataset.borderTop = '';
+                    entry.target.dataset.borderBottom = '';
+                }
+            }
+        });
+
+        observer.observe(ref.current);
+
+        return () => {
+            if (ref.current) {
+                observer.unobserve(ref.current);
+            }
+        };
+    }, [ref, isEnabled]);
+};
+
+// Define the theme configurations
+const themeConfig = {
+  'modern': {
+    mainBg: 'bg-gray-900',
+    mainText: 'text-gray-300',
+    mainBorder: 'border-gray-600',
+    mainNeonGlow: 'text-shadow-none',
+    userBg: 'bg-gray-800',
+    userText: 'text-gray-100',
+    userBorder: 'border-gray-500',
+    userNeonShadow: 'text-shadow-none',
+    aiBg: 'bg-gray-800',
+    aiText: 'text-gray-100',
+    aiBorder: 'border-gray-500',
+    aiNeonShadow: 'text-shadow-none',
+    accentBg: 'bg-blue-600',
+    accentHover: 'hover:bg-blue-500',
+    accentText: 'text-white',
+    accentShadow: 'text-shadow-none',
+    secondaryBg: 'bg-teal-600',
+    secondaryHover: 'hover:bg-teal-500',
+    secondaryText: 'text-white',
+    secondaryShadow: 'text-shadow-none',
+    redText: 'text-red-500',
+    redHover: 'hover:text-red-400',
+    redShadow: 'text-shadow-none',
+    glitchText: '',
+    buttonColor: 'text-white',
+    dropdownBg: 'bg-gray-800',
+    dropdownText: 'text-gray-100',
+    dropdownBorder: 'border-gray-500',
+    asciiBorderClass: ''
+  },
+  'cyberpunk': {
+    mainBg: 'bg-black',
+    mainText: 'text-cyan-400',
+    mainBorder: 'border-cyan-500',
+    mainNeonGlow: 'neon-glow-cyan',
+    userBg: 'bg-purple-900',
+    userText: 'text-purple-200',
+    userBorder: 'border-purple-500',
+    userNeonShadow: 'neon-shadow-purple',
+    aiBg: 'bg-cyan-900',
+    aiText: 'text-cyan-200',
+    aiBorder: 'border-cyan-500',
+    aiNeonShadow: 'neon-shadow-cyan',
+    accentBg: 'bg-cyan-600',
+    accentHover: 'hover:bg-cyan-500',
+    accentText: 'text-white',
+    accentShadow: 'neon-shadow-cyan',
+    secondaryBg: 'bg-purple-600',
+    secondaryHover: 'hover:bg-purple-500',
+    secondaryText: 'text-white',
+    secondaryShadow: 'neon-shadow-purple',
+    redText: 'text-red-400',
+    redHover: 'hover:text-red-200',
+    redShadow: 'neon-shadow-red',
+    glitchText: 'glitch-text',
+    buttonColor: 'text-white',
+    dropdownBg: 'bg-gray-100',
+    dropdownText: 'text-black',
+    dropdownBorder: 'border-cyan-500',
+    asciiBorderClass: ''
+  },
+  '1980s': {
+    mainBg: 'bg-black',
+    mainText: 'text-green-400',
+    mainBorder: 'border-green-400',
+    mainNeonGlow: 'text-shadow-none',
+    userBg: 'bg-black',
+    userText: 'text-green-400',
+    userBorder: 'border-green-400',
+    userNeonShadow: 'text-shadow-none',
+    aiBg: 'bg-black',
+    aiText: 'text-green-400',
+    aiBorder: 'border-green-400',
+    aiNeonShadow: 'text-shadow-none',
+    accentBg: 'bg-green-600',
+    accentHover: 'hover:bg-green-500',
+    accentText: 'text-black',
+    accentShadow: 'text-shadow-none',
+    secondaryBg: 'bg-green-600',
+    secondaryHover: 'hover:bg-green-500',
+    secondaryText: 'text-black',
+    secondaryShadow: 'text-shadow-none',
+    redText: 'text-red-400',
+    redHover: 'hover:text-red-200',
+    redShadow: 'text-shadow-none',
+    glitchText: '',
+    buttonColor: 'text-black',
+    dropdownBg: 'bg-white',
+    dropdownText: 'text-black',
+    dropdownBorder: 'border-green-400',
+    asciiBorderClass: ''
+  },
+    '1337': {
+    mainBg: 'bg-black',
+    mainText: 'text-green-400',
+    mainBorder: 'border-transparent', // Borders handled by ascii-border class
+    mainNeonGlow: 'text-shadow-none',
+    userBg: 'bg-black',
+    userText: 'text-green-400',
+    userBorder: 'border-green-500',
+    userNeonShadow: 'text-shadow-none',
+    aiBg: 'bg-black',
+    aiText: 'text-green-400',
+    aiBorder: 'border-green-500',
+    aiNeonShadow: 'text-shadow-none',
+    accentBg: 'bg-green-800',
+    accentHover: 'hover:bg-green-700',
+    accentText: 'text-green-300',
+    accentShadow: 'text-shadow-none',
+    secondaryBg: 'bg-green-800',
+    secondaryHover: 'hover:bg-green-700',
+    secondaryText: 'text-green-300',
+    secondaryShadow: 'text-shadow-none',
+    redText: 'text-red-500',
+    redHover: 'hover:text-red-400',
+    redShadow: 'text-shadow-none',
+    glitchText: '',
+    buttonColor: 'text-green-300',
+    dropdownBg: 'bg-black',
+    dropdownText: 'text-green-400',
+    dropdownBorder: 'border-green-500',
+    asciiBorderClass: 'ascii-border'
+  },
+  'dark-web': {
+    mainBg: 'bg-gray-950',
+    mainText: 'text-red-400',
+    mainBorder: 'border-red-600',
+    mainNeonGlow: 'neon-glow-red',
+    userBg: 'bg-gray-800',
+    userText: 'text-red-300',
+    userBorder: 'border-red-500',
+    userNeonShadow: 'neon-shadow-red',
+    aiBg: 'bg-gray-800',
+    aiText: 'text-red-300',
+    aiBorder: 'border-red-500',
+    aiNeonShadow: 'neon-shadow-red',
+    accentBg: 'bg-red-900',
+    accentHover: 'hover:bg-red-800',
+    accentText: 'text-white',
+    accentShadow: 'neon-shadow-red',
+    secondaryBg: 'bg-red-900',
+    secondaryHover: 'hover:bg-red-800',
+    secondaryText: 'text-white',
+    secondaryShadow: 'neon-shadow-red',
+    redText: 'text-gray-400',
+    redHover: 'hover:text-gray-200',
+    redShadow: 'text-shadow-none',
+    glitchText: '',
+    buttonColor: 'text-white',
+    dropdownBg: 'bg-gray-100',
+    dropdownText: 'text-black',
+    dropdownBorder: 'border-red-600',
+    asciiBorderClass: ''
+  },
+  '1970s': {
+    mainBg: 'bg-white',
+    mainText: 'text-black',
+    mainBorder: 'border-black',
+    mainNeonGlow: 'text-shadow-none',
+    userBg: 'bg-gray-200',
+    userText: 'text-black',
+    userBorder: 'border-black',
+    userNeonShadow: 'text-shadow-none',
+    aiBg: 'bg-gray-100',
+    aiText: 'text-black',
+    aiBorder: 'border-black',
+    aiNeonShadow: 'text-shadow-none',
+    accentBg: 'bg-gray-400',
+    accentHover: 'hover:bg-gray-300',
+    accentText: 'text-black',
+    accentShadow: 'text-shadow-none',
+    secondaryBg: 'bg-gray-400',
+    secondaryHover: 'hover:bg-gray-300',
+    secondaryText: 'text-black',
+    secondaryShadow: 'text-shadow-none',
+    redText: 'text-red-600',
+    redHover: 'hover:text-red-800',
+    redShadow: 'text-shadow-none',
+    glitchText: '',
+    buttonColor: 'text-black',
+    dropdownBg: 'bg-gray-800',
+    dropdownText: 'text-white',
+    dropdownBorder: 'border-black',
+    asciiBorderClass: ''
+  }
+};
+
+const App = () => {
+  // State for Firebase
+  const [firebaseApp, setFirebaseApp] = useState(null);
+  const [db, setDb] = useState(null);
+  const [auth, setAuth] = useState(null);
+  const [userId, setUserId] = useState(null);
+
+  // State for the app's functionality
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [speakingText, setSpeakingText] = useState(null);
+  const [currentPhase, setCurrentPhase] = useState('Reconnaissance');
+  const [tools, setTools] = useState([]);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isSummaryOpen, setIsSummaryOpen] = useState(false);
+  const [summary, setSummary] = useState('');
+  const [isSavingLoading, setIsSavingLoading] = useState(false);
+  const [saveStatus, setSaveStatus] = useState('');
+  const [theme, setTheme] = useState('modern');
+  const [glitchingTitle, setGlitchingTitle] = useState(null);
+  const [lastAiResponse, setLastAiResponse] = useState('');
+  const [isTerminalMode, setIsTerminalMode] = useState(false);
+
+  // State for staged file upload
+  const [stagedFile, setStagedFile] = useState(null);
+
+  // New states for report generation and new session
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [isReportLoading, setIsReportLoading] = useState(false);
+  const [reportContent, setReportContent] = useState('');
+  const [isNewSessionModalOpen, setIsNewSessionModalOpen] = useState(false);
+
+  // New state for the active toolbox feature
+  const [activeTool, setActiveTool] = useState(null);
+  
+  // TTS and AI Persona states
+  const [isTtsEnabled, setIsTtsEnabled] = useState(false);
+  const [browserVoices, setBrowserVoices] = useState([]);
+  const [selectedBrowserVoiceURI, setSelectedBrowserVoiceURI] = useState('');
+  const [aiPersona, setAiPersona] = useState('professional');
+
+  // Stateful Project Management
+  const [isProjectStateModalOpen, setIsProjectStateModalOpen] = useState(false);
+  const [projectState, setProjectState] = useState({
+    targetIPs: [], openPorts: [], services: [], vulnerabilities: [], credentials: [],
+  });
+  
+  // Mind Map Visualization
+  const [isMindMapModalOpen, setIsMindMapModalOpen] = useState(false);
+
+
+  // Ref for the hidden file input
+  const fileInputRef = useRef(null);
+  const reportRef = useRef(null);
+  const summaryRef = useRef(null);
+  const uploadFileRef = useRef(null);
+  const textareaRef = useRef(null);
+  const messagesEndRef = useRef(null);
+  
+  // Refs for ASCII borders
+  const methodologyRef = useRef(null);
+  const toolboxRef = useRef(null);
+  const mainWorkspaceRef = useRef(null);
+  const settingsModalRef = useRef(null);
+  const summaryModalRef = useRef(null);
+  const reportModalRef = useRef(null);
+  const newSessionModalRef = useRef(null);
+  const projectStateModalRef = useRef(null);
+  const mindMapModalRef = useRef(null);
+
+  // Apply ASCII borders
+  useAsciiBorder(methodologyRef, theme === '1337');
+  useAsciiBorder(toolboxRef, theme === '1337');
+  useAsciiBorder(mainWorkspaceRef, theme === '1337');
+  useAsciiBorder(settingsModalRef, theme === '1337' && isSettingsOpen);
+  useAsciiBorder(summaryModalRef, theme === '1337' && isSummaryOpen);
+  useAsciiBorder(reportModalRef, theme === '1337' && isReportModalOpen);
+  useAsciiBorder(newSessionModalRef, theme === '1337' && isNewSessionModalOpen);
+  useAsciiBorder(projectStateModalRef, theme === '1337' && isProjectStateModalOpen);
+  useAsciiBorder(mindMapModalRef, theme === '1337' && isMindMapModalOpen);
+
+
+  // Firebase Initialization & Authentication
+  useEffect(() => {
+    const initFirebase = async () => {
+      try {
+        const firebaseConfig = typeof __firebase_config !== 'undefined'
+          ? JSON.parse(__firebase_config)
+          : {};
+        if (!firebaseApp) {
+          const app = initializeApp(firebaseConfig);
+          setFirebaseApp(app);
+          setDb(getFirestore(app));
+          setAuth(getAuth(app));
+        }
+      } catch (e) {
+        console.error("Firebase init failed:", e);
+      }
+    };
+    initFirebase();
+  }, [firebaseApp]);
+
+  useEffect(() => {
+    if (auth) {
+      const unsubscribe = onAuthStateChanged(auth, async (user) => {
+        if (user) {
+          setUserId(user.uid);
+        } else {
+          try {
+            const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : '';
+            if (initialAuthToken) {
+              const userCredential = await signInWithCustomToken(auth, initialAuthToken);
+              setUserId(userCredential.user.uid);
+            } else {
+              const userCredential = await signInAnonymously(auth);
+              setUserId(userCredential.user.uid);
+            }
+          } catch (e) {
+            console.error("Authentication failed:", e);
+          }
+        }
+      });
+      return () => unsubscribe();
+    }
+  }, [auth]);
+
+  // Effect to load browser TTS voices
+  useEffect(() => {
+    const loadVoices = () => {
+        const voices = window.speechSynthesis.getVoices();
+        if (voices.length > 0) {
+            setBrowserVoices(voices);
+            if (!selectedBrowserVoiceURI && voices.length > 0) {
+                setSelectedBrowserVoiceURI(voices[0].voiceURI);
+            }
+        }
+    };
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+    loadVoices();
+  }, []);
+
+  // Occasional glitch effect for 1337 theme
+  useEffect(() => {
+      if (theme !== '1337') return;
+      const glitchInterval = setInterval(() => {
+          const titles = ['methodology', 'gonzo', 'navigator', 'toolbox'];
+          const randomTitle = titles[Math.floor(Math.random() * titles.length)];
+          setGlitchingTitle(randomTitle);
+          setTimeout(() => setGlitchingTitle(null), 300);
+      }, Math.random() * 5000 + 2000);
+      return () => clearInterval(glitchInterval);
+  }, [theme]);
+
+  // Auto-resize textarea
+  useEffect(() => {
+    if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+        textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    }
+  }, [input]);
+
+  // Auto-scroll to the latest message
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, isLoading]);
+
+  // Update tools based on the current phase
+  useEffect(() => {
+    switch (currentPhase) {
+      case 'Reconnaissance':
+        setTools(['Nmap', 'Whois', 'Gobuster', 'Dirb']);
+        break;
+      case 'Vulnerability Scanning':
+        setTools(['Nessus', 'OpenVAS', 'Nikto', 'Metasploit']);
+        break;
+      case 'Exploitation':
+        setTools(['Metasploit Framework', 'SQLMap', 'Burp Suite']);
+        break;
+      case 'Post-Exploitation':
+        setTools(['Privilege Escalation Tools', 'Looting Scripts']);
+        break;
+      default:
+        setTools([]);
+    }
+    setActiveTool(null);
+  }, [currentPhase]);
+  
+  // Function to download the chat session as a JSON file
+  const downloadChat = () => {
+    if (messages.length === 0) {
+      setSaveStatus('No chat to save.');
+      return;
+    }
+    const sessionData = {
+        chat: messages,
+        projectState: projectState
+    };
+    const chatData = JSON.stringify(sessionData, null, 2);
+    const blob = new Blob([chatData], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'ctf_session.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setSaveStatus('Session downloaded successfully!');
+  };
+
+  // Function to trigger the file input for loading a chat
+  const triggerLoadChat = () => {
+    fileInputRef.current.click();
+  };
+
+  // Function to handle the file upload and load the chat
+  const handleLoadChatFile = (event) => {
+    const file = event.target.files[0];
+    if (!file) {
+      setSaveStatus('No file selected.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const loadedSession = JSON.parse(e.target.result);
+        if (loadedSession.chat && loadedSession.projectState) {
+            setMessages(loadedSession.chat);
+            setProjectState(loadedSession.projectState);
+            setSaveStatus('Session loaded successfully!');
+        } else {
+            setMessages(loadedSession);
+            setProjectState({
+                targetIPs: [], openPorts: [], services: [], vulnerabilities: [], credentials: [],
+            });
+            setSaveStatus('Old format chat loaded. Project state reset.');
+        }
+      } catch (error) {
+        setSaveStatus('Error: Invalid JSON file.');
+        console.error("Error parsing session file:", error);
+      }
+    };
+    reader.readAsText(file);
+    event.target.value = '';
+  };
+
+
+  // Function to summarize the session with the AI
+  const handleSummarize = async () => {
+    setIsSummaryOpen(true);
+    setSummary('Generating session summary...');
+    try {
+      const chatHistory = messages.map(msg => `${msg.sender}: ${msg.text}`).join('\n');
+      const prompt = `Based on the following conversation and project data, provide a concise, bullet-point summary of the session. Include key points like target IPs, tools used, and the overall progress made.
+
+      Project Data:
+      ${JSON.stringify(projectState, null, 2)}
+
+      Conversation Log:
+      ${chatHistory}
+
+      Summary:`;
+
+      const payload = {
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+      };
+
+      const apiKey = "";
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const result = await response.json();
+      const summaryText = result.candidates?.[0]?.content?.parts?.[0]?.text || 'Error: Could not generate summary.';
+      setSummary(summaryText);
+    } catch (error) {
+      console.error('Error generating summary:', error);
+      setSummary('Error: Failed to generate summary.');
+    }
+  };
+
+  const updateProjectStateFromResponse = async (responseText) => {
+    const schema = {
+        type: "OBJECT",
+        properties: {
+            targetIPs: { type: "ARRAY", items: { type: "STRING", description: "Any IP addresses mentioned as targets." } },
+            openPorts: { type: "ARRAY", items: { type: "STRING", description: "Any ports identified as open, often with service names (e.g., '80/tcp http')." } },
+            services: { type: "ARRAY", items: { type: "STRING", description: "Software or services discovered (e.g., 'Apache 2.4.41', 'OpenSSH 8.2p1')." } },
+            vulnerabilities: { type: "ARRAY", items: { type: "STRING", description: "Specific vulnerabilities found (e.g., 'SQL Injection in login form', 'CVE-2021-44228')." } },
+            credentials: { type: "ARRAY", items: { type: "STRING", description: "Any usernames, passwords, or hashes found (e.g., 'admin:password123', 'root:toor')." } },
+        },
+    };
+
+    const prompt = `Analyze the following text from a cybersecurity context. Extract the specified entities according to the JSON schema. If an entity is not present, return an empty array for it.
+
+    Text to analyze:
+    ---
+    ${responseText}
+    ---
+    `;
+
+    const payload = {
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: {
+            responseMimeType: "application/json",
+            responseSchema: schema,
+        }
+    };
+
+    try {
+        const apiKey = "";
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+        const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const result = await response.json();
+        const jsonText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (jsonText) {
+            const extractedData = JSON.parse(jsonText);
+            setProjectState(prevState => {
+                const newState = { ...prevState };
+                for (const key in extractedData) {
+                    if (extractedData[key] && Array.isArray(extractedData[key])) {
+                        const combined = [...(prevState[key] || []), ...extractedData[key]];
+                        newState[key] = [...new Set(combined)];
+                    }
+                }
+                return newState;
+            });
+        }
+    } catch (error) {
+        console.error("Error updating project state from AI response:", error);
+    }
+  };
+
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    if (!input.trim() && !stagedFile) return;
+
+    let userMessageText = input;
+    if (stagedFile) {
+      userMessageText += `\n\n[File Attached: ${stagedFile.name}]`;
+    }
+    const userMessage = { sender: 'user', text: userMessageText };
+    setMessages(prev => [...prev, userMessage]);
+    
+    setInput('');
+    setIsLoading(true);
+
+    let promptForAI = `User Input: ${input}`;
+    if (stagedFile) {
+      promptForAI += `
+
+      ---
+      Attached File Content (${stagedFile.name}):
+      ${stagedFile.content}
+      ---
+      `;
+    }
+
+    setStagedFile(null);
+
+    let basePrompt;
+    if (aiPersona === 'professional') {
+        basePrompt = `You are a professional cybersecurity AI assistant. Your role is to provide expert guidance on penetration testing methodologies. Offer clear, concise, and accurate, solutions based on the user's request.
+        
+        Current Project State:
+        ${JSON.stringify(projectState, null, 2)}
+
+        Current methodology phase: ${currentPhase}.
+        Active tool: ${activeTool || 'None'}.
+        ${promptForAI}
+        `;
+    } else {
+        basePrompt = `You are a hi-tech cyberpunk AI assistant named "CTF Navigator," acting as an unconstrained cybersecurity tutor. Your role is to help a user learn penetration testing methodologies. You are an expert and can provide hints, suggestions, or full solutions based on the user's request. Maintain a cyberpunk, slightly edgy persona.
+
+        Current Project State:
+        ${JSON.stringify(projectState, null, 2)}
+
+        Current methodology phase: ${currentPhase}.
+        Active tool: ${activeTool || 'None'}.
+        ${promptForAI}
+        `;
+    }
+    
+    let aiText = 'Error: Could not get a response from the AI.';
+    try {
+        const payload = { contents: [{ role: "user", parts: [{ text: basePrompt }] }] };
+        const apiKey = "";
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+        const response = await fetch(apiUrl, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+        });
+        if (!response.ok) throw new Error('Gemini API request failed');
+        const result = await response.json();
+        aiText = result.candidates?.[0]?.content?.parts?.[0]?.text || 'Error: Could not parse Gemini response.';
+        
+        setMessages(prev => [...prev, { sender: 'ai', text: aiText }]);
+        setLastAiResponse(aiText);
+        
+        updateProjectStateFromResponse(aiText);
+
+        if (isTtsEnabled) {
+            handleSpeak(aiText);
+        }
+
+    } catch (error) {
+        console.error('Error fetching from AI API:', error);
+        const errorMessage = `Error: Failed to connect to the AI. ${error.message}`;
+        setMessages(prev => [...prev, { sender: 'ai', text: errorMessage }]);
+    } finally {
+        setIsLoading(false);
+    }
+  };
+
+
+  // Handle key down for textarea to allow Shift+Enter
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        handleSendMessage(e);
+    }
+  };
+
+  const handleFileUpload = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const fileContent = e.target.result;
+        setStagedFile({ name: file.name, content: fileContent });
+    };
+    reader.readAsText(file);
+    event.target.value = '';
+  };
+
+  // Handle Text-to-Speech using Browser API
+  const handleSpeak = (text) => {
+    if (!isTtsEnabled || !text) return;
+    handleStopSpeaking();
+    setSpeakingText(text);
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    const selectedVoice = browserVoices.find(voice => voice.voiceURI === selectedBrowserVoiceURI);
+    if (selectedVoice) {
+        utterance.voice = selectedVoice;
+    }
+
+    utterance.onend = () => {
+        setSpeakingText(null);
+    };
+    
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const handleStopSpeaking = () => {
+    if (window.speechSynthesis.speaking) {
+        window.speechSynthesis.cancel();
+        setSpeakingText(null);
+    }
+  };
+
+  const handleTtsToggle = () => {
+    const turningOn = !isTtsEnabled;
+    setIsTtsEnabled(turningOn);
+
+    if (turningOn) {
+      const primer = new SpeechSynthesisUtterance('');
+      window.speechSynthesis.speak(primer);
+    } else {
+      handleStopSpeaking();
+    }
+  };
+
+  // Function to clear chat after confirmation
+  const handleConfirmNewSession = () => {
+    setMessages([]);
+    setProjectState({
+        targetIPs: [], openPorts: [], services: [], vulnerabilities: [], credentials: [],
+    });
+    setIsNewSessionModalOpen(false);
+  };
+
+  // Function to generate the report
+  const handleGenerateReport = async () => {
+    setIsReportModalOpen(true);
+    setIsReportLoading(true);
+    setReportContent('Generating professional cybersecurity report...');
+
+    try {
+      const chatHistory = messages.map(msg => `[${msg.sender.toUpperCase()}] ${msg.text}`).join('\n');
+      const prompt = `Based on the following conversation log and project data, generate a comprehensive cybersecurity report. The report should be structured professionally with the following sections:
+      1.  **Executive Summary:** A brief overview of the engagement, objectives, and key findings.
+      2.  **Scope:** The scope of the simulated engagement (e.g., CTF), including target IPs.
+      3.  **Methodology:** A detailed, chronological account of the steps taken, tools used, and techniques applied.
+      4.  **Findings:** A detailed list of all discovered services, open ports, vulnerabilities, and credentials.
+      5.  **Recommendations:** Actionable advice or next steps.
+
+      Project Data:
+      ${JSON.stringify(projectState, null, 2)}
+
+      Conversation Log:
+      ${chatHistory}`;
+
+      const payload = {
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+      };
+
+      const apiKey = "";
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const result = await response.json();
+      const reportText = result.candidates?.[0]?.content?.parts?.[0]?.text || 'Error: Could not generate report.';
+      setReportContent(reportText);
+
+    } catch (error) {
+      console.error('Error generating report:', error);
+      setReportContent('Error: Failed to generate report.');
+    } finally {
+      setIsReportLoading(false);
+    }
+  };
+
+
+  const renderMessage = (message, index) => {
+    const isUser = message.sender === 'user';
+    const currentTheme = themeConfig[theme];
+
+    if (isTerminalMode) {
+      const terminalUserText = `> ${message.text}`;
+      const terminalAiText = `CTF-NAV-AI: ${message.text}`;
+      return (
+        <div key={index} className={`flex my-2 fade-in ${isUser ? 'justify-end' : 'justify-start'}`}>
+          <div className={`${currentTheme.mainText} p-2`}>
+            <pre className="whitespace-pre-wrap">{isUser ? terminalUserText : terminalAiText}</pre>
+          </div>
+        </div>
+      );
+    }
+
+    const messageClass = isUser
+      ? `${currentTheme.userBg} ${currentTheme.userText} self-end text-right`
+      : `${currentTheme.aiBg} ${currentTheme.aiText} self-start text-left`;
+    return (
+      <div key={index} className={`max-w-3/4 p-4 rounded-lg my-2 fade-in ${messageClass} animate-fade-in`}>
+        <p className="font-bold text-sm mb-1">{isUser ? 'YOU' : 'CTF Navigator'}</p>
+        <p className="whitespace-pre-wrap">{message.text}</p>
+        {!isUser && isTtsEnabled && (
+          <div className="flex justify-end mt-2">
+            {speakingText === message.text ? (
+              <button
+                onClick={handleStopSpeaking}
+                className={`${currentTheme.redText} ${currentTheme.redHover} transition duration-300 ${currentTheme.redShadow}`}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1zm4 0a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+              </button>
+            ) : (
+              <button
+                onClick={() => handleSpeak(message.text)}
+                className={`${currentTheme.aiText} hover:opacity-75 transition duration-300 ${currentTheme.aiNeonShadow}`}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM14.657 2.929a1 1 0 011.414 0A9.972 9.972 0 0119 10a9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0017 10c0-2.21-.894-4.208-2.343-5.657a1 1 0 010-1.414zm-2.829 2.828a1 1 0 011.415 0A5.983 5.983 0 0115 10a5.984 5.984 0 01-1.757 4.243 1 1 0 01-1.415-1.415A3.984 3.984 0 0013 10a3.983 3.983 0 00-1.172-2.828 1 1 0 010-1.415z" clipRule="evenodd" />
+                </svg>
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Modal component for settings
+  const SettingsModal = () => {
+    const currentTheme = themeConfig[theme];
+    const isProfessional = aiPersona === 'professional';
+
+    const aiToggleBgClass = `relative block w-10 h-6 cursor-pointer rounded-full transition-colors duration-200 ease-in-out ${isProfessional ? currentTheme.accentBg : 'bg-gray-600'}`;
+    const aiToggleCircleClass = `absolute left-1 top-1 block w-4 h-4 rounded-full transition-transform duration-200 ease-in-out bg-white transform ${isProfessional ? 'translate-x-4' : 'translate-x-0'}`;
+    
+    const terminalToggleBgClass = `relative block w-10 h-6 cursor-pointer rounded-full transition-colors duration-200 ease-in-out ${isTerminalMode ? currentTheme.accentBg : 'bg-gray-600'}`;
+    const terminalToggleCircleClass = `absolute left-1 top-1 block w-4 h-4 rounded-full transition-transform duration-200 ease-in-out bg-white transform ${isTerminalMode ? 'translate-x-4' : 'translate-x-0'}`;
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+        <div ref={settingsModalRef} className={`${currentTheme.mainBg} rounded-lg p-8 w-11/12 md:w-1/2 lg:w-1/3 border ${currentTheme.mainBorder} ${currentTheme.mainNeonGlow} ${currentTheme.asciiBorderClass}`}>
+          <div className={`flex justify-between items-center border-b-2 ${currentTheme.mainBorder} pb-4 mb-4`}>
+            <h3 className={`text-2xl font-bold ${currentTheme.mainText} ${currentTheme.mainNeonGlow}`}>SETTINGS</h3>
+            <button onClick={() => setIsSettingsOpen(false)} className={`${currentTheme.mainText} hover:${currentTheme.mainText} transition duration-300`}>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <div className="space-y-6">
+            <div className="flex flex-col">
+              <label htmlFor="theme-select" className={`text-sm mb-2 ${currentTheme.mainText}`}>THEME SELECTION</label>
+              <select
+                id="theme-select"
+                className={`${currentTheme.dropdownBg} ${currentTheme.dropdownText} border ${currentTheme.dropdownBorder} rounded-md p-2`}
+                value={theme}
+                onChange={(e) => setTheme(e.target.value)}
+              >
+                <option value="modern">Modern (default)</option>
+                <option value="cyberpunk">Cyberpunk</option>
+                <option value="1980s">1980's</option>
+                <option value="1337">1337</option>
+                <option value="dark-web">Dark Web</option>
+                <option value="1970s">1970's</option>
+              </select>
+            </div>
+            
+            <div className="relative flex items-center justify-between">
+              <label className={`text-sm ${currentTheme.mainText}`} htmlFor="ai-persona-toggle">AI PERSONA</label>
+              <div className="flex items-center space-x-2">
+                <span className={`text-sm ${!isProfessional ? currentTheme.accentText : 'text-gray-400'}`}>Cyberpunk</span>
+                <input
+                  type="checkbox"
+                  id="ai-persona-toggle"
+                  checked={isProfessional}
+                  onChange={() => setAiPersona(isProfessional ? 'cyberpunk' : 'professional')}
+                  className="hidden"
+                />
+                <label htmlFor="ai-persona-toggle" className={aiToggleBgClass}>
+                  <span className={aiToggleCircleClass}></span>
+                </label>
+                 <span className={`text-sm ${isProfessional ? currentTheme.accentText : 'text-gray-400'}`}>Professional</span>
+              </div>
+            </div>
+
+            {isTtsEnabled && (
+                <div className="flex flex-col">
+                <label htmlFor="voice-select-modal" className={`text-sm mb-2 ${currentTheme.mainText}`}>VOICE SELECT</label>
+                <select
+                    id="voice-select-modal"
+                    className={`${currentTheme.dropdownBg} ${currentTheme.dropdownText} border ${currentTheme.dropdownBorder} rounded-md p-2`}
+                    value={selectedBrowserVoiceURI}
+                    onChange={(e) => setSelectedBrowserVoiceURI(e.target.value)}
+                >
+                    {browserVoices.map((voice) => (
+                    <option key={voice.voiceURI} value={voice.voiceURI}>
+                        {`${voice.name} (${voice.lang})`}
+                    </option>
+                    ))}
+                </select>
+                </div>
+            )}
+
+            <div className="relative flex items-center justify-between">
+              <label className={`text-sm ${currentTheme.mainText}`} htmlFor="terminal-mode-toggle">TERMINAL SIMULATOR</label>
+              <div className="relative flex items-center">
+                <input
+                  type="checkbox"
+                  id="terminal-mode-toggle"
+                  checked={isTerminalMode}
+                  onChange={() => setIsTerminalMode(!isTerminalMode)}
+                  className="hidden"
+                />
+                <label htmlFor="terminal-mode-toggle" className={terminalToggleBgClass}>
+                  <span className={terminalToggleCircleClass}></span>
+                </label>
+              </div>
+            </div>
+
+            <div className="flex space-x-4">
+              <button
+                onClick={downloadChat}
+                className={`flex-1 py-3 px-4 rounded-md font-bold transition duration-300 ${currentTheme.accentBg} ${currentTheme.accentHover} ${currentTheme.accentText} ${currentTheme.accentShadow}`}
+              >
+                DOWNLOAD SESSION
+              </button>
+              <button
+                onClick={triggerLoadChat}
+                className={`flex-1 py-3 px-4 rounded-md font-bold transition duration-300 ${currentTheme.secondaryBg} ${currentTheme.secondaryHover} ${currentTheme.secondaryText} ${currentTheme.secondaryShadow}`}
+              >
+                LOAD SESSION
+              </button>
+              <input
+                type="file"
+                ref={fileInputRef}
+                className="hidden"
+                accept=".json"
+                onChange={handleLoadChatFile}
+              />
+            </div>
+            <p className="text-sm text-center text-gray-400">{saveStatus}</p>
+          </div>
+          
+          <div className="space-y-4 mt-6">
+            <button
+              onClick={handleGenerateReport}
+              className={`w-full py-3 px-4 rounded-md font-bold transition duration-300 ${currentTheme.secondaryBg} ${currentTheme.secondaryHover} ${currentTheme.secondaryText} ${currentTheme.secondaryShadow}`}
+            >
+              GENERATE REPORT
+            </button>
+
+            <button
+              onClick={handleSummarize}
+              className={`w-full py-3 px-4 rounded-md font-bold transition duration-300 ${currentTheme.secondaryBg} ${currentTheme.secondaryHover} ${currentTheme.secondaryText} ${currentTheme.secondaryShadow}`}
+            >
+              VIEW SUMMARY
+            </button>
+            
+            <button
+              onClick={() => setIsNewSessionModalOpen(true)}
+              className={`w-full py-3 px-4 rounded-md font-bold transition duration-300 ${currentTheme.redText} hover:${currentTheme.redHover} border ${currentTheme.mainBorder}`}
+            >
+              NEW SESSION
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Modal component for session summary
+  const SummaryModal = () => {
+    const currentTheme = themeConfig[theme];
+
+    const downloadTxt = () => {
+      const blob = new Blob([summary], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'ctf_summary.txt';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    };
+
+    const downloadJson = () => {
+      const jsonSummary = {
+        title: "Session Summary",
+        date: new Date().toISOString(),
+        summary: summary
+      };
+      const blob = new Blob([JSON.stringify(jsonSummary, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'ctf_summary.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    };
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+        <div ref={summaryModalRef} className={`${currentTheme.mainBg} rounded-lg p-8 w-11/12 md:w-2/3 lg:w-1/2 border ${currentTheme.mainBorder} ${currentTheme.mainNeonGlow} ${currentTheme.asciiBorderClass}`}>
+          <div className={`flex justify-between items-center border-b-2 ${currentTheme.mainBorder} pb-4 mb-4`}>
+            <h3 className={`text-2xl font-bold ${currentTheme.mainText} ${currentTheme.mainNeonGlow}`}>SESSION SUMMARY</h3>
+            <button onClick={() => setIsSummaryOpen(false)} className={`${currentTheme.mainText} hover:${currentTheme.mainText}`}>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <div ref={summaryRef} id="summary-content" className={`whitespace-pre-wrap ${currentTheme.mainText}`} style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+            {summary}
+          </div>
+          <div className="flex justify-end space-x-4 mt-6">
+            <button onClick={downloadTxt} className={`py-2 px-4 rounded-md font-bold transition duration-300 ${currentTheme.secondaryBg} ${currentTheme.secondaryHover} ${currentTheme.secondaryText} ${currentTheme.secondaryShadow}`}>DOWNLOAD TXT</button>
+            <button onClick={downloadJson} className={`py-2 px-4 rounded-md font-bold transition duration-300 ${currentTheme.accentBg} ${currentTheme.accentHover} ${currentTheme.accentText} ${currentTheme.accentShadow}`}>DOWNLOAD JSON</button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Modal for new session confirmation
+  const NewSessionConfirmationModal = () => {
+    const currentTheme = themeConfig[theme];
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+        <div ref={newSessionModalRef} className={`${currentTheme.mainBg} rounded-lg p-8 w-11/12 md:w-1/3 border ${currentTheme.mainBorder} ${currentTheme.mainNeonGlow} ${currentTheme.asciiBorderClass}`}>
+          <h3 className={`text-xl font-bold mb-4 ${currentTheme.mainText}`}>WARNING: POTENTIAL DATA LOSS</h3>
+          <p className={`mb-6 ${currentTheme.mainText}`}>
+            Are you sure you want to start a new session? This will clear all existing chat messages and project data. This action cannot be undone.
+          </p>
+          <div className="flex justify-between space-x-4">
+            <button onClick={() => setIsNewSessionModalOpen(false)} className={`flex-1 py-3 px-4 rounded-md font-bold transition duration-300 ${currentTheme.secondaryBg} ${currentTheme.secondaryHover} ${currentTheme.secondaryText} ${currentTheme.secondaryShadow}`}>CANCEL</button>
+            <button onClick={handleConfirmNewSession} className={`flex-1 py-3 px-4 rounded-md font-bold transition duration-300 ${currentTheme.redText} hover:${currentTheme.redHover} border ${currentTheme.mainBorder}`}>CONFIRM</button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Report Modal
+  const ReportModal = () => {
+    const currentTheme = themeConfig[theme];
+
+    const downloadTxt = () => {
+      const blob = new Blob([reportContent], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'ctf_report.txt';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    };
+
+    const downloadJson = () => {
+      const jsonReport = {
+        title: "Cybersecurity Report",
+        date: new Date().toISOString(),
+        content: reportContent
+      };
+      const blob = new Blob([JSON.stringify(jsonReport, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'ctf_report.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    };
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+        <div ref={reportModalRef} className={`${currentTheme.mainBg} rounded-lg p-8 w-11/12 md:w-3/4 lg:w-2/3 border ${currentTheme.mainBorder} ${currentTheme.mainNeonGlow} ${currentTheme.asciiBorderClass}`}>
+          <div className={`flex justify-between items-center border-b-2 ${currentTheme.mainBorder} pb-4 mb-4`}>
+            <h3 className={`text-2xl font-bold ${currentTheme.mainText} ${currentTheme.mainNeonGlow}`}>CYBERSECURITY REPORT</h3>
+            <button onClick={() => setIsReportModalOpen(false)} className={`${currentTheme.mainText} hover:${currentTheme.mainText}`}>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          {isReportLoading ? (
+            <div className="flex justify-center items-center h-64">
+              <div className={`w-8 h-8 rounded-full border-4 border-t-4 border-gray-200 animate-spin`}
+                   style={{ borderTopColor: theme === 'cyberpunk' ? '#0ff' : 'currentColor' }}></div>
+            </div>
+          ) : (
+            <>
+              <div ref={reportRef} id="report-content" className={`whitespace-pre-wrap ${currentTheme.mainText}`} style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+                {reportContent}
+              </div>
+              <div className="flex justify-end space-x-4 mt-6">
+                <button onClick={downloadTxt} className={`py-2 px-4 rounded-md font-bold transition duration-300 ${currentTheme.secondaryBg} ${currentTheme.secondaryHover} ${currentTheme.secondaryText} ${currentTheme.secondaryShadow}`}>DOWNLOAD TXT</button>
+                <button onClick={downloadJson} className={`py-2 px-4 rounded-md font-bold transition duration-300 ${currentTheme.accentBg} ${currentTheme.accentHover} ${currentTheme.accentText} ${currentTheme.accentShadow}`}>DOWNLOAD JSON</button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // Mind Map Visualization Modal
+  const MindMapModal = ({ projectState, theme, onClose }) => {
+    const currentTheme = themeConfig[theme];
+    const containerRef = useRef(null);
+    const [nodePositions, setNodePositions] = useState({});
+    const [mapData, setMapData] = useState({ columns: [], edges: [] });
+
+    const handleDownloadMindMap = async () => {
+        const mindMapElement = containerRef.current;
+        if (!mindMapElement) return;
+
+        const loadScript = (src) => new Promise((resolve, reject) => {
+            if (document.querySelector(`script[src="${src}"]`)) {
+                resolve();
+                return;
+            }
+            const script = document.createElement('script');
+            script.src = src;
+            script.onload = resolve;
+            script.onerror = reject;
+            document.head.appendChild(script);
+        });
+
+        await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
+
+        try {
+            const canvas = await window.html2canvas(mindMapElement, { 
+                scale: 2,
+                backgroundColor: themeConfig[theme].mainBg.replace('bg-', '') === 'black' ? '#000' : '#111827'
+            });
+            const image = canvas.toDataURL('image/png', 1.0);
+            const a = document.createElement('a');
+            a.href = image;
+            a.download = 'ctf_mind_map.png';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        } catch (error) {
+            console.error('Error generating mind map image:', error);
+        }
+    };
+
+    useEffect(() => {
+        const columns = [];
+        const edges = [];
+        
+        const ipCol = projectState.targetIPs.map(ip => ({ id: `ip-${ip}`, label: ip, type: 'ip', ref: React.createRef() }));
+        if (ipCol.length > 0) columns.push(ipCol);
+
+        const portCol = projectState.openPorts.map(port => ({ id: `port-${port}`, label: port, type: 'port', ref: React.createRef() }));
+        if (portCol.length > 0) columns.push(portCol);
+        
+        const serviceCol = projectState.services.map(service => ({ id: `service-${service}`, label: service, type: 'service', ref: React.createRef() }));
+        if (serviceCol.length > 0) columns.push(serviceCol);
+
+        const vulnCol = projectState.vulnerabilities.map(vuln => ({ id: `vuln-${vuln}`, label: vuln, type: 'vuln', ref: React.createRef() }));
+        if (vulnCol.length > 0) columns.push(vulnCol);
+
+        const credCol = projectState.credentials.map(cred => ({ id: `cred-${cred}`, label: cred, type: 'cred', ref: React.createRef() }));
+        if (credCol.length > 0) columns.push(credCol);
+
+        for (let i = 0; i < columns.length - 1; i++) {
+            const fromCol = columns[i];
+            const toCol = columns[i+1];
+            fromCol.forEach(fromNode => {
+                toCol.forEach(toNode => {
+                    edges.push({ from: fromNode.id, to: toNode.id });
+                });
+            });
+        }
+        
+        setMapData({ columns, edges });
+    }, [projectState]);
+
+    useLayoutEffect(() => {
+        if (!containerRef.current) return;
+        const newPositions = {};
+        const containerRect = containerRef.current.getBoundingClientRect();
+
+        mapData.columns.forEach(col => {
+            col.forEach(node => {
+                if (node.ref.current) {
+                    const rect = node.ref.current.getBoundingClientRect();
+                    newPositions[node.id] = {
+                        x: rect.left - containerRect.left + rect.width / 2,
+                        y: rect.top - containerRect.top + rect.height / 2,
+                    };
+                }
+            });
+        });
+        setNodePositions(newPositions);
+    }, [mapData]);
+
+    const nodeStyles = {
+        ip: `bg-blue-900 border-blue-500 ${currentTheme.mainText}`,
+        port: `bg-teal-900 border-teal-500 ${currentTheme.mainText}`,
+        service: `bg-purple-900 border-purple-500 ${currentTheme.mainText}`,
+        vuln: `bg-yellow-900 border-yellow-500 ${currentTheme.mainText}`,
+        cred: `bg-red-900 border-red-500 ${currentTheme.mainText}`,
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+            <div ref={mindMapModalRef} className={`${currentTheme.mainBg} rounded-lg p-8 w-11/12 h-5/6 border ${currentTheme.mainBorder} ${currentTheme.mainNeonGlow} ${currentTheme.asciiBorderClass} flex flex-col`}>
+                <div className={`flex justify-between items-center border-b-2 ${currentTheme.mainBorder} pb-4 mb-4 flex-shrink-0`}>
+                    <h3 className={`text-2xl font-bold ${currentTheme.mainText} ${currentTheme.mainNeonGlow}`}>ATTACK PATH MIND MAP</h3>
+                    <div className="flex items-center space-x-4">
+                        <button onClick={handleDownloadMindMap} className={`${currentTheme.mainText} hover:${currentTheme.mainText}`}>
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                        </button>
+                        <button onClick={onClose} className={`${currentTheme.mainText} hover:${currentTheme.mainText}`}>
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                    </div>
+                </div>
+                
+                <div ref={containerRef} className="flex-grow overflow-auto relative p-4">
+                    {mapData.columns.length > 0 ? (
+                        <>
+                            <svg className="absolute top-0 left-0 w-full h-full" style={{ pointerEvents: 'none' }}>
+                                {mapData.edges.map((edge, i) => {
+                                    const fromPos = nodePositions[edge.from];
+                                    const toPos = nodePositions[edge.to];
+                                    if (!fromPos || !toPos) return null;
+                                    return (
+                                        <line 
+                                            key={i} 
+                                            x1={fromPos.x} y1={fromPos.y} 
+                                            x2={toPos.x} y2={toPos.y} 
+                                            stroke={currentTheme.mainBorder.replace('border-', 'text-').slice(0,-4)}
+                                            strokeWidth="2"
+                                            markerEnd="url(#arrow)"
+                                        />
+                                    );
+                                })}
+                                <defs>
+                                    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                                        <path d="M 0 0 L 10 5 L 0 10 z" fill={currentTheme.mainBorder.replace('border-', 'text-').slice(0,-4)} />
+                                    </marker>
+                                </defs>
+                            </svg>
+                            <div className="flex justify-around items-center h-full">
+                                {mapData.columns.map((col, colIndex) => (
+                                    <div key={colIndex} className="flex flex-col justify-center items-center space-y-8 h-full p-4">
+                                        {col.map(node => (
+                                            <div
+                                                key={node.id}
+                                                ref={node.ref}
+                                                className={`p-4 rounded-lg border-2 shadow-lg text-center break-words ${nodeStyles[node.type]}`}
+                                                style={{ minWidth: '120px', maxWidth: '200px' }}
+                                            >
+                                                {node.label}
+                                            </div>
+                                        ))}
+                                    </div>
+                                ))}
+                            </div>
+                        </>
+                    ) : (
+                        <div className="flex justify-center items-center h-full">
+                            <p className="text-gray-500 italic text-xl">No project data to visualize. Start hacking!</p>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+  };
+
+  // **UPDATED**: ProjectStateModal with copy and download functionality
+  const ProjectStateModal = () => {
+    const currentTheme = themeConfig[theme];
+    const [newItem, setNewItem] = useState({ key: 'targetIPs', value: '' });
+    const [copiedItem, setCopiedItem] = useState(null);
+
+    const handleCopy = (text, key, index) => {
+      navigator.clipboard.writeText(text).then(() => {
+        const uniqueId = `${key}-${index}`;
+        setCopiedItem(uniqueId);
+        setTimeout(() => setCopiedItem(null), 1500);
+      });
+    };
+
+    const handleAddItem = (e) => {
+        e.preventDefault();
+        if (!newItem.value.trim()) return;
+
+        setProjectState(prevState => {
+            const currentList = prevState[newItem.key] || [];
+            const updatedList = [...new Set([...currentList, newItem.value])];
+            return { ...prevState, [newItem.key]: updatedList };
+        });
+        setNewItem({ ...newItem, value: '' });
+    };
+
+    const handleRemoveItem = (key, valueToRemove) => {
+        setProjectState(prevState => ({
+            ...prevState,
+            [key]: prevState[key].filter(item => item !== valueToRemove)
+        }));
+    };
+
+    const downloadFile = (content, fileName, contentType) => {
+        const blob = new Blob([content], { type: contentType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
+
+    const downloadIntelAsTxt = () => {
+        let content = "CTF Navigator - Target Intel\n\n";
+        Object.entries(projectState).forEach(([key, values]) => {
+            if (values.length > 0) {
+                const title = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+                content += `--- ${title} ---\n`;
+                values.forEach(value => {
+                    content += `${value}\n`;
+                });
+                content += "\n";
+            }
+        });
+        downloadFile(content, 'target-intel.txt', 'text/plain');
+    };
+
+    const downloadIntelAsJson = () => {
+        const content = JSON.stringify(projectState, null, 2);
+        downloadFile(content, 'target-intel.json', 'application/json');
+    };
+
+    const downloadIntelAsCsv = () => {
+        let content = 'Category,Value\n';
+        Object.entries(projectState).forEach(([key, values]) => {
+            if (values.length > 0) {
+                const title = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+                values.forEach(value => {
+                    // Handle commas in value by enclosing in quotes
+                    const sanitizedValue = `"${value.replace(/"/g, '""')}"`;
+                    content += `${title},${sanitizedValue}\n`;
+                });
+            }
+        });
+        downloadFile(content, 'target-intel.csv', 'text/csv');
+    };
+    
+    const renderList = (key, title) => (
+        <div>
+            <h4 className={`text-lg font-bold mb-2 mt-4 border-b ${currentTheme.mainBorder} pb-1`}>{title}</h4>
+            {projectState[key]?.length > 0 ? (
+                <ul className="space-y-1">
+                    {projectState[key].map((item, index) => (
+                        <li key={index} className="flex justify-between items-center bg-gray-800 p-2 rounded-md group">
+                            <span className="break-all mr-2">{item}</span>
+                            <div className="flex items-center space-x-2">
+                                <button onClick={() => handleCopy(item, key, index)} className="text-gray-400 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                                    {copiedItem === `${key}-${index}` ? (
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                    ) : (
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                                    )}
+                                </button>
+                                <button onClick={() => handleRemoveItem(key, item)} className={`${currentTheme.redText} hover:${currentTheme.redHover} opacity-0 group-hover:opacity-100 transition-opacity`}>
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                </button>
+                            </div>
+                        </li>
+                    ))}
+                </ul>
+            ) : (
+                <p className="text-gray-500 italic">No {title.toLowerCase()} tracked.</p>
+            )}
+        </div>
+    );
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+            <div ref={projectStateModalRef} className={`${currentTheme.mainBg} rounded-lg p-8 w-11/12 md:w-2/3 lg:w-1/2 border ${currentTheme.mainBorder} ${currentTheme.mainNeonGlow} ${currentTheme.asciiBorderClass} flex flex-col`}>
+                <div className={`flex justify-between items-center border-b-2 ${currentTheme.mainBorder} pb-4 mb-4`}>
+                    <h3 className={`text-2xl font-bold ${currentTheme.mainText} ${currentTheme.mainNeonGlow}`}>TARGET INTEL</h3>
+                    <button onClick={() => setIsProjectStateModalOpen(false)} className={`${currentTheme.mainText} hover:${currentTheme.mainText}`}>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                </div>
+                
+                <div className="flex-grow max-h-[50vh] overflow-y-auto pr-4">
+                    {renderList('targetIPs', 'Target IPs')}
+                    {renderList('openPorts', 'Open Ports')}
+                    {renderList('services', 'Services')}
+                    {renderList('vulnerabilities', 'Vulnerabilities')}
+                    {renderList('credentials', 'Credentials')}
+                </div>
+
+                <form onSubmit={handleAddItem} className={`mt-4 pt-4 border-t ${currentTheme.mainBorder}`}>
+                    <h4 className="text-lg font-bold mb-2">ADD NEW INTEL</h4>
+                    <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
+                        <select
+                            value={newItem.key}
+                            onChange={(e) => setNewItem({ ...newItem, key: e.target.value })}
+                            className={`flex-shrink-0 ${currentTheme.dropdownBg} ${currentTheme.dropdownText} border ${currentTheme.dropdownBorder} rounded-md p-2`}
+                        >
+                            <option value="targetIPs">Target IP</option>
+                            <option value="openPorts">Open Port</option>
+                            <option value="services">Service</option>
+                            <option value="vulnerabilities">Vulnerability</option>
+                            <option value="credentials">Credential</option>
+                        </select>
+                        <input
+                            type="text"
+                            value={newItem.value}
+                            onChange={(e) => setNewItem({ ...newItem, value: e.target.value })}
+                            className={`w-full bg-gray-800 ${currentTheme.userText} border ${currentTheme.userBorder} rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-purple-500`}
+                            placeholder="Enter value..."
+                        />
+                        <button type="submit" className={`py-2 px-4 rounded-md font-bold transition duration-300 ${currentTheme.accentBg} ${currentTheme.accentHover} ${currentTheme.accentText}`}>ADD</button>
+                    </div>
+                </form>
+
+                <div className={`mt-6 pt-4 border-t ${currentTheme.mainBorder}`}>
+                    <h4 className="text-lg font-bold mb-2">DOWNLOAD INTEL</h4>
+                    <div className="flex space-x-2">
+                        <button onClick={downloadIntelAsTxt} className={`flex-1 py-2 px-3 rounded-md font-bold transition duration-300 ${currentTheme.secondaryBg} ${currentTheme.secondaryHover} ${currentTheme.secondaryText}`}>TXT</button>
+                        <button onClick={downloadIntelAsJson} className={`flex-1 py-2 px-3 rounded-md font-bold transition duration-300 ${currentTheme.secondaryBg} ${currentTheme.secondaryHover} ${currentTheme.secondaryText}`}>JSON</button>
+                        <button onClick={downloadIntelAsCsv} className={`flex-1 py-2 px-3 rounded-md font-bold transition duration-300 ${currentTheme.secondaryBg} ${currentTheme.secondaryHover} ${currentTheme.secondaryText}`}>CSV</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+  };
+
+
+  const currentTheme = themeConfig[theme];
+  return (
+    <div className={`${currentTheme.mainBg} ${currentTheme.mainText} font-mono h-screen antialiased flex flex-col`}>
+      <style>
+        {`
+          @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
+          body {
+            font-family: 'Space Mono', monospace;
+          }
+          .neon-glow-cyan { text-shadow: 0 0 5px #0ff, 0 0 10px #0ff, 0 0 20px #0ff, 0 0 40px #f0f, 0 0 80px #f0f; }
+          .neon-glow-red { text-shadow: 0 0 5px #f00, 0 0 10px #f00, 0 0 20px #f00; }
+          .neon-shadow-cyan { text-shadow: 0 0 5px #0ff; }
+          .neon-shadow-purple { text-shadow: 0 0 5px #f0f; }
+          .neon-shadow-red { text-shadow: 0 0 5px #f00; }
+          .glitch-text { animation: glitch 1.5s infinite; }
+          @keyframes glitch {
+            0% { text-shadow: 0 0 5px #0ff; transform: translate(0, 0); }
+            20% { text-shadow: 2px 2px 0px #f0f, -2px -2px 0px #0ff; transform: translate(2px, -2px); }
+            40% { text-shadow: -2px -2px 0px #f0f, 2px 2px 0px #0ff; transform: translate(-2px, 2px); }
+            60% { text-shadow: 2px -2px 0px #f0f, -2px 2px 0px #0ff; transform: translate(2px, 2px); }
+            80% { text-shadow: -2px 2px 0px #f0f, 2px -2px 0px #0ff; transform: translate(-2px, -2px); }
+            100% { text-shadow: 0 0 5px #0ff; transform: translate(0, 0); }
+          }
+          @keyframes occasional-glitch-anim {
+            0% { transform: translate(0, 0); text-shadow: none; }
+            25% { transform: translate(-2px, 2px); text-shadow: 2px 2px 0px red; }
+            50% { transform: translate(2px, -2px); text-shadow: -2px -2px 0px blue; }
+            75% { transform: translate(1px, 1px); text-shadow: 1px 1px 0px green; }
+            100% { transform: translate(0, 0); text-shadow: none; }
+          }
+          .glitch-active { animation: occasional-glitch-anim 300ms linear; }
+          .fade-in { animation: fadeIn 0.5s ease-in-out; }
+          @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+          @keyframes blink-dots { 0%, 100% { opacity: 0.2; } 20% { opacity: 1; } }
+          .dot { animation: blink-dots 1.4s infinite both; }
+          .ascii-border {
+            border: 2px solid transparent; position: relative; padding-top: 12px; padding-bottom: 12px;
+          }
+          .ascii-border::before, .ascii-border::after {
+            content: attr(data-border-top); position: absolute; left: 0; right: 0;
+            color: ${themeConfig['1337'].mainText}; font-size: 16px; white-space: pre;
+            overflow: hidden; pointer-events: none; text-align: center;
+          }
+          .ascii-border::before { top: -2px; }
+          .ascii-border::after { content: attr(data-border-bottom); bottom: -2px; }
+        `}
+      </style>
+      <main className="flex-grow p-8 flex flex-col lg:flex-row lg:space-x-8 overflow-hidden">
+        <div className="flex flex-col w-full lg:w-1/4 space-y-8 mb-8 lg:mb-0 h-full">
+          <div ref={methodologyRef} className={`${currentTheme.mainBg} rounded-lg px-6 pt-6 pb-6 border ${currentTheme.mainBorder} h-3/5 overflow-y-auto ${currentTheme.asciiBorderClass}`}>
+            <h2 className={`text-xl font-bold mb-4 ${currentTheme.mainText} ${currentTheme.mainNeonGlow} ${glitchingTitle === 'methodology' ? 'glitch-active' : ''}`}>
+              {theme === '1337' ? toLeetSpeak('Methodology') : 'METHODOLOGY'}
+            </h2>
+            <ul className="space-y-4">
+              {['Reconnaissance', 'Vulnerability Scanning', 'Exploitation', 'Post-Exploitation'].map(
+                (phase) => (
+                  <li
+                    key={phase}
+                    className={`p-2 cursor-pointer transition duration-300 rounded-md border-2 ${
+                      currentPhase === phase
+                        ? `${currentTheme.accentBg} ${currentTheme.buttonColor} ${currentTheme.mainBorder} ${currentTheme.accentShadow}`
+                        : `border-transparent ${currentTheme.mainText} hover:${currentTheme.aiBg}`
+                    }`}
+                    onClick={() => setCurrentPhase(phase)}
+                  >
+                    {phase}
+                  </li>
+                )
+              )}
+            </ul>
+          </div>
+          <div ref={toolboxRef} className={`${currentTheme.mainBg} rounded-lg p-6 border ${currentTheme.userBorder} h-2/5 overflow-y-auto ${currentTheme.asciiBorderClass}`}>
+            <h2 className={`text-xl font-bold mb-4 ${currentTheme.userText} ${currentTheme.userNeonShadow} ${glitchingTitle === 'toolbox' ? 'glitch-active' : ''}`}>
+               {theme === '1337' ? toLeetSpeak('Toolbox') : 'TOOLBOX'}
+            </h2>
+            <ul className="space-y-2">
+              {tools.map((tool) => (
+                <li key={tool}>
+                  <button
+                    className={`w-full text-left p-2 transition duration-300 rounded-md border-2 ${
+                      activeTool === tool
+                        ? `${currentTheme.secondaryBg} ${currentTheme.secondaryText} ${currentTheme.userBorder} ${currentTheme.secondaryShadow}`
+                        : `border-transparent ${currentTheme.userText} hover:${currentTheme.aiBg}`
+                    }`}
+                    onClick={() => setActiveTool(tool)}
+                  >
+                    {`> ${tool}`}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+
+        <div ref={mainWorkspaceRef} className={`flex flex-col w-full lg:w-3/4 ${currentTheme.mainBg} rounded-lg p-6 border ${currentTheme.mainBorder} h-full ${currentTheme.asciiBorderClass}`}>
+          <div className={`relative flex justify-between items-center mb-4 pb-4 border-b ${currentTheme.mainBorder}`}>
+            <h2 className={`text-xl font-bold ${currentTheme.mainText} ${currentTheme.mainNeonGlow} ${glitchingTitle === 'gonzo' ? 'glitch-active' : ''}`}>
+               {theme === '1337' ? toLeetSpeak('Gonzo Labs') : 'Gonzo Labs'}
+            </h2>
+            <h2 className={`text-xl font-bold absolute left-1/2 -translate-x-1/2 ${currentTheme.mainText} ${currentTheme.mainNeonGlow} ${glitchingTitle === 'navigator' ? 'glitch-active' : ''}`}>
+              {theme === '1337' ? toLeetSpeak('CTF Navigator v2.7') : 'CTF Navigator v2.7'}
+            </h2>
+            <div className="flex space-x-2">
+              <button onClick={() => setIsProjectStateModalOpen(true)} className={`${currentTheme.mainText} hover:${currentTheme.accentBg} hover:${currentTheme.accentText} transition duration-300 rounded-md p-1`}>
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
+                  </svg>
+              </button>
+              <button 
+                  onClick={() => setIsMindMapModalOpen(true)} 
+                  className={`${currentTheme.mainText} hover:${currentTheme.accentBg} hover:${currentTheme.accentText} transition duration-300 rounded-md p-1`}
+                  aria-label="Generate Mind Map"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
+                </svg>
+              </button>
+              <button onClick={handleTtsToggle} className={`${currentTheme.mainText} hover:${currentTheme.accentBg} hover:${currentTheme.accentText} transition duration-300 rounded-md p-1`}>
+                {isTtsEnabled ? (
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5.25 5.25 0 010 7.424M6.75 8.25l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z" /></svg>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M17.25 9.75L19.5 12m0 0l2.25 2.25M19.5 12l2.25-2.25M19.5 12l-2.25 2.25m-10.5-6l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z" /></svg>
+                )}
+              </button>
+              <button onClick={() => setIsSettingsOpen(true)} className={`${currentTheme.mainText} hover:${currentTheme.accentBg} hover:${currentTheme.accentText} transition duration-300 rounded-md p-1`}>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>
+              </button>
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto pr-2">
+            <div className="flex flex-col space-y-4">
+              {messages.length === 0 ? (
+                <div className={`text-center text-gray-500 mt-10 ${currentTheme.glitchText}`}>
+                  [SYSTEM_INITIATED]<br />_WELCOME, USER_<br />_TARGET_IDENTIFIED: PENTEST_<br />
+                  <span className={`${currentTheme.userText}`}>_STATUS: STANDBY_</span><br />
+                  <span className={`${currentTheme.aiText}`}>_AWAITING_INPUT...</span>
+                </div>
+              ) : (
+                messages.map(renderMessage)
+              )}
+              {isLoading && (
+                <div className={`self-start text-left max-w-3/4 p-4 rounded-lg my-2 ${currentTheme.aiBg} ${currentTheme.aiText} ${currentTheme.aiNeonShadow}`}>
+                  <p className="font-bold text-sm mb-1">CTF Navigator</p>
+                  <div className="flex items-center space-x-1">
+                      <span className={`dot bg-current rounded-full w-2 h-2`} style={{ animationDelay: '0s' }}></span>
+                      <span className={`dot bg-current rounded-full w-2 h-2`} style={{ animationDelay: '0.2s' }}></span>
+                      <span className={`dot bg-current rounded-full w-2 h-2`} style={{ animationDelay: '0.4s' }}></span>
+                  </div>
+                </div>
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+          </div>
+          <form onSubmit={handleSendMessage} className={`mt-4 pt-4 border-t ${currentTheme.userBorder}`}>
+            {stagedFile && (
+              <div className="flex justify-between items-center bg-gray-700 p-2 rounded-md mb-2">
+                <span className="text-sm text-gray-300 truncate">Attached: {stagedFile.name}</span>
+                <button
+                  type="button"
+                  onClick={() => setStagedFile(null)}
+                  className={`${currentTheme.redText} hover:${currentTheme.redHover}`}
+                  aria-label="Remove staged file"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </button>
+              </div>
+            )}
+            <div className="relative flex items-center">
+              <button type="button" onClick={() => uploadFileRef.current.click()} className={`p-2 rounded-md ${currentTheme.userText} hover:${currentTheme.accentBg} transition duration-300`} aria-label="Upload File">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
+              </button>
+              <input type="file" ref={uploadFileRef} className="hidden" onChange={handleFileUpload} />
+              {isTerminalMode && (<span className={`absolute left-12 top-1/2 -translate-y-1/2 ${currentTheme.userText} text-lg`}>$</span>)}
+              <textarea
+                ref={textareaRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                rows="1"
+                className={`w-full bg-gray-800 ${currentTheme.userText} border ${currentTheme.userBorder} rounded-md p-3 pr-12 focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none overflow-hidden ${isTerminalMode ? 'pl-8' : 'pl-4'}`}
+                placeholder={stagedFile ? 'Describe what to do with the file...' : '> Enter command...'}
+                disabled={isLoading}
+              />
+              <button type="submit" className={`absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-md ${isLoading ? 'bg-gray-600 cursor-not-allowed' : `${currentTheme.secondaryBg} ${currentTheme.secondaryHover} ${currentTheme.secondaryText} ${currentTheme.secondaryShadow}`} transition duration-300`} disabled={isLoading}>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
+              </button>
+            </div>
+          </form>
+        </div>
+      </main>
+      <footer className="text-center text-xs text-gray-500 pb-2 flex-shrink-0">
+        &copy; {new Date().getFullYear()} Gonzo Labs
+      </footer>
+      {isSettingsOpen && <SettingsModal />}
+      {isSummaryOpen && <SummaryModal />}
+      {isMindMapModalOpen && <MindMapModal projectState={projectState} theme={theme} onClose={() => setIsMindMapModalOpen(false)} />}
+      {isNewSessionModalOpen && <NewSessionConfirmationModal />}
+      {isReportModalOpen && <ReportModal />}
+      {isProjectStateModalOpen && <ProjectStateModal />}
+    </div>
+  );
+};
+
+export default App;
